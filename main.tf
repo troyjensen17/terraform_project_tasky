@@ -2,13 +2,14 @@ provider "aws" {
   region = "us-east-1"
 }
 
-# Generate private and public keys
+# Generate private key
 resource "tls_private_key" "tasky_key" {
   algorithm = "RSA"
   rsa_bits  = 4096
 }
 
-resource "tls_public_key" "tasky_key" {
+# Declare public key using data block
+data "tls_public_key" "tasky_key" {
   depends_on = [tls_private_key.tasky_key]
   public_key_openssh = tls_private_key.tasky_key.public_key_openssh
 }
@@ -16,7 +17,7 @@ resource "tls_public_key" "tasky_key" {
 # AWS Key Pair
 resource "aws_key_pair" "tasky_key" {
   key_name   = "tasky-key"
-  public_key = tls_public_key.tasky_key.public_key_openssh
+  public_key = data.tls_public_key.tasky_key.public_key_openssh
 }
 
 # Create a VPC
@@ -96,7 +97,7 @@ resource "aws_instance" "tasky" {
               EOF
 }
 
-# Create S3 Bucket (without ACLs)
+# Create S3 Bucket
 resource "aws_s3_bucket" "backup_bucket" {
   bucket = "database-backups-project"
 
@@ -104,6 +105,4 @@ resource "aws_s3_bucket" "backup_bucket" {
     Name = "backup-bucket"
   }
 }
-
-# Removed deprecated backup object resource
 
