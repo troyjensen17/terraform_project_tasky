@@ -1,64 +1,101 @@
-# Step 1: Set up the provider
 provider "aws" {
   region = "us-east-1"
 }
 
-# Step 2: Create VPC
-resource "aws_vpc" "main" {
+resource "aws_vpc" "tasky_vpc" {
   cidr_block = "10.0.0.0/16"
 }
 
-# Step 3: Create Subnets
-resource "aws_subnet" "subnet_a" {
-  vpc_id                  = aws_vpc.main.id
+resource "aws_subnet" "tasky_subnet" {
+  vpc_id                  = aws_vpc.tasky_vpc.id
   cidr_block              = "10.0.1.0/24"
   availability_zone       = "us-east-1a"
   map_public_ip_on_launch = true
 }
 
-resource "aws_subnet" "subnet_b" {
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = "10.0.2.0/24"
-  availability_zone       = "us-east-1b"
-  map_public_ip_on_launch = true
-}
+resource "aws_security_group" "tasky_sg" {
+  name        = "tasky-sg"
+  description = "Allow SSH and MongoDB access"
+  vpc_id      = aws_vpc.tasky_vpc.id
 
-# Step 4: Create Security Group
-resource "aws_security_group" "allow_all" {
-  name        = "allow_all"
-  description = "Allow all inbound and outbound traffic"
-  
   ingress {
-    from_port   = 0
-    to_port     = 65535
+    from_port   = 22
+    to_port     = 22
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
+  ingress {
+    from_port   = 27017
+    to_port     = 27017
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   egress {
     from_port   = 0
-    to_port     = 65535
-    protocol    = "tcp"
+    to_port     = 0
+    protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
 }
 
-# Step 5: Create EC2 Instance
-resource "aws_instance" "tasky" {
-  ami             = "ami-0c55b159cbfafe1f0"  # Amazon Linux 2 AMI
-  instance_type   = "t2.micro"
-  key_name        = aws_key_pair.tasky_key.key_name
-  subnet_id       = aws_subnet.subnet_a.id
-  security_groups = [aws_security_group.allow_all.name]
-
-  tags = {
-    Name = "Tasky-EC2-Instance"
-  }
+resource "aws_key_pair" "tasky_key" {
+  key_name   = "tasky_key"
+  public_key = ssh_key_pair.tasky_key.public_key
 }
 
-# Step 6: S3 Bucket for Backups
+resource "tls_private_key" "tasky_private_key" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+resource "aws_instance" "tasky" {
+  ami             = "ami-0c55b159cbfafe1f0"  # Replace with the correct AMI ID for Amazon Linux 2
+  instance_type   = "t2.micro"
+  subnet_id       = aws_subnet.tasky_subnet.id
+  key_name        = aws_key_pair.tasky_key.key_name
+  security_groups = [aws_security_group.tasky_sg.name]
+
+  tags = {
+    Name = "tasky-instance"
+  }
+
+  user_data = <<-EOF
+              #!/bin/bash
+              yum update -y
+              yum install -y git
+              yum install -y mongodb
+              systemctl start mongod
+              systemctl enable mongod
+              EOF
+}
+
 resource "aws_s3_bucket" "backup_bucket" {
-  bucket = "tasky-backup-bucket"
+  bucket = "tasky-backup-bucket-unique"
   acl    = "private"
 }
 
+resource "aws_s3_bucket_acl" "backup_bucket_acl" {
+  bucket = aws_s3_bucket.backup_bucket.id
+  acl    = "private"
+}
+
+resource "aws_s3_bucket_object" "backup_object" {
+  bucket = aws_s3_bucket.backup_bucket.id
+  key    = "backup-file"
+  source = "path/to/your/local/file"
+}
+
+output "instance_public_ip" {
+  value = aws_instance.tasky.public_ip
+}
+
+output "s3_bucket_name" {
+  value = aws_s3_bucket.backup_bucket.bucket
+}
+
+output "ssh_private_key" {
+  value     = tls_private_key.tasky_private_key.private_key_pem
+  sensitive = true
+}
