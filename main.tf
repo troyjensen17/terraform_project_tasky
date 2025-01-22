@@ -2,6 +2,18 @@ provider "aws" {
   region = "us-east-1"
 }
 
+provider "tls" {}
+
+resource "tls_private_key" "tasky_key" {
+  algorithm = "RSA"
+  rsa_bits  = 2048
+}
+
+resource "aws_key_pair" "tasky_key" {
+  key_name   = "tasky-key"
+  public_key = tls_private_key.tasky_key.public_key_openssh
+}
+
 resource "aws_vpc" "tasky_vpc" {
   cidr_block = "10.0.0.0/16"
 }
@@ -40,62 +52,33 @@ resource "aws_security_group" "tasky_sg" {
   }
 }
 
-resource "aws_key_pair" "tasky_key" {
-  key_name   = "tasky_key"
-  public_key = ssh_key_pair.tasky_key.public_key
-}
-
-resource "tls_private_key" "tasky_private_key" {
-  algorithm = "RSA"
-  rsa_bits  = 4096
-}
-
 resource "aws_instance" "tasky" {
-  ami             = "ami-0c55b159cbfafe1f0"  # Replace with the correct AMI ID for Amazon Linux 2
-  instance_type   = "t2.micro"
-  subnet_id       = aws_subnet.tasky_subnet.id
-  key_name        = aws_key_pair.tasky_key.key_name
-  security_groups = [aws_security_group.tasky_sg.name]
+  ami                    = "ami-xxxxxxxxxxxx"  # Replace with a valid Amazon Linux 2 AMI ID
+  instance_type          = "t2.micro"
+  key_name               = aws_key_pair.tasky_key.key_name
+  security_groups       = [aws_security_group.tasky_sg.name]
+  subnet_id             = aws_subnet.tasky_subnet.id
+  associate_public_ip_address = true
 
   tags = {
-    Name = "tasky-instance"
+    Name = "Tasky-Instance"
   }
-
-  user_data = <<-EOF
-              #!/bin/bash
-              yum update -y
-              yum install -y git
-              yum install -y mongodb
-              systemctl start mongod
-              systemctl enable mongod
-              EOF
 }
 
 resource "aws_s3_bucket" "backup_bucket" {
-  bucket = "tasky-backup-bucket-unique"
+  bucket = "database-backups-project"
   acl    = "private"
 }
 
-resource "aws_s3_bucket_acl" "backup_bucket_acl" {
+resource "aws_s3_bucket_acl" "backup_acl" {
   bucket = aws_s3_bucket.backup_bucket.id
   acl    = "private"
 }
 
-resource "aws_s3_bucket_object" "backup_object" {
+resource "aws_s3_object" "backup_object" {
   bucket = aws_s3_bucket.backup_bucket.id
-  key    = "backup-file"
-  source = "path/to/your/local/file"
+  key    = "backup.tar.gz"
+  source = "/path/to/backup.tar.gz"  # Replace with the actual backup path
 }
 
-output "instance_public_ip" {
-  value = aws_instance.tasky.public_ip
-}
 
-output "s3_bucket_name" {
-  value = aws_s3_bucket.backup_bucket.bucket
-}
-
-output "ssh_private_key" {
-  value     = tls_private_key.tasky_private_key.private_key_pem
-  sensitive = true
-}
