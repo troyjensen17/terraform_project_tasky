@@ -8,16 +8,10 @@ resource "tls_private_key" "tasky_key" {
   rsa_bits  = 4096
 }
 
-# Declare public key using data block
-data "tls_public_key" "tasky_key" {
-  depends_on = [tls_private_key.tasky_key]
-  public_key_openssh = tls_private_key.tasky_key.public_key_openssh
-}
-
 # AWS Key Pair
 resource "aws_key_pair" "tasky_key" {
   key_name   = "tasky-key"
-  public_key = data.tls_public_key.tasky_key.public_key_openssh
+  public_key = tls_private_key.tasky_key.public_key_openssh
 }
 
 # Create a VPC
