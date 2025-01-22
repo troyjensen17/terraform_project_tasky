@@ -2,9 +2,9 @@ provider "aws" {
   region = "us-east-1"
 }
 
+# Create VPC
 resource "aws_vpc" "tasky_vpc" {
   cidr_block = "10.0.0.0/16"
-  
   enable_dns_support = true
   enable_dns_hostnames = true
 
@@ -13,9 +13,10 @@ resource "aws_vpc" "tasky_vpc" {
   }
 }
 
+# Create Subnet
 resource "aws_subnet" "tasky_subnet" {
   vpc_id                  = aws_vpc.tasky_vpc.id
-  cidr_block             = "10.0.1.0/24"
+  cidr_block              = "10.0.1.0/24"
   availability_zone       = "us-east-1a"
   map_public_ip_on_launch = true
 
@@ -24,9 +25,10 @@ resource "aws_subnet" "tasky_subnet" {
   }
 }
 
+# Create Security Group
 resource "aws_security_group" "tasky_sg" {
-  name_prefix = "tasky-sg"
   description = "Allow SSH and MongoDB access"
+  vpc_id      = aws_vpc.tasky_vpc.id
 
   ingress {
     from_port   = 22
@@ -54,17 +56,19 @@ resource "aws_security_group" "tasky_sg" {
   }
 }
 
+# Create EC2 Key Pair
 resource "aws_key_pair" "tasky_key" {
   key_name   = "tasky-key"
-  public_key = file("~/.ssh/id_rsa.pub")
+  public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDIgrJjGPjc8dGK/PXK5i+4Ypm21oALmqH/4KXTkAPGxNNgMCAPNqAEHH50oyg7WTT6kmvSGzQwMIcYofGiNXnQdCQ44rd29WRWrSjuUkmOQrlrDDW8ivqLEXGDBfoxi++/hwNknIdqyUXG/zLK6Mfq676M93NITgpaemF5QFrLCbHrIuCcRInTmUZpHCQZ7x6iu1EOTcWgWY9ekkylNBX8uCCRj2DlJ6CNuSxNByzs7auyam+iZYB1NzKjoe2HMJrioR/fA8oGiG2aNh9NQL4vdMig4TwncTMDdzl82YdxBnD7MVEfyrqzF3f2wazLkF2a9oWGfIBZQuc66rW0SRXH troyjensen@Troys-MacBook-Pro.local"
 }
 
+# Create EC2 Instance (Amazon Linux 2)
 resource "aws_instance" "tasky" {
-  ami                    = "ami-xxxxxxxxxxxx"
-  instance_type          = "t2.micro"
-  key_name               = aws_key_pair.tasky_key.key_name
-  security_groups        = [aws_security_group.tasky_sg.name]
-  subnet_id              = aws_subnet.tasky_subnet.id
+  ami           = "ami-043a5a82b6cf98947"  # Corrected Amazon Linux 2 AMI
+  instance_type = "t2.micro"
+  subnet_id     = aws_subnet.tasky_subnet.id
+  security_group_ids = [aws_security_group.tasky_sg.id]
+  key_name      = aws_key_pair.tasky_key.key_name
   associate_public_ip_address = true
 
   tags = {
@@ -72,6 +76,7 @@ resource "aws_instance" "tasky" {
   }
 }
 
+# Create S3 Bucket for database backups
 resource "aws_s3_bucket" "backup_bucket" {
   bucket = "database-backups-project"
   force_destroy = true
@@ -81,17 +86,7 @@ resource "aws_s3_bucket" "backup_bucket" {
   }
 }
 
-resource "aws_s3_bucket_acl" "backup_acl" {
-  bucket = aws_s3_bucket.backup_bucket.bucket
-  acl    = "private"
-}
-
-resource "aws_s3_object" "backup_object" {
-  bucket = aws_s3_bucket.backup_bucket.bucket
-  key    = "backup.tar.gz"
-  source = "/path/to/backup.tar.gz"
-}
-
+# Create the TLS Private Key
 resource "tls_private_key" "tasky_key" {
   algorithm = "RSA"
   rsa_bits  = 2048
