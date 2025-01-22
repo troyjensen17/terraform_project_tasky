@@ -81,21 +81,3 @@ resource "aws_instance" "tasky" {
   user_data = "e501a67afc0bfee985464517436fa65ec0e1fca4"
 }
 
-resource "aws_security_group_rule" "allow_mongo" {
-  type              = "ingress"
-  from_port         = 27017
-  to_port           = 27017
-  protocol          = "tcp"
-  cidr_blocks       = ["0.0.0.0/0"]
-  security_group_id = aws_security_group.tasky_sg.id
-}
-
-resource "aws_security_group_rule" "allow_ssh" {
-  type              = "ingress"
-  from_port         = 22
-  to_port           = 22
-  protocol          = "tcp"
-  cidr_blocks       = ["0.0.0.0/0"]
-  security_group_id = aws_security_group.tasky_sg.id
-}
-
