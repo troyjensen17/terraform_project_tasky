@@ -1,13 +1,21 @@
 provider "aws" {
-  region = "us-east-1"  # Use your desired AWS region
+  region = "us-east-1"
 }
 
-# Create VPC
+resource "aws_key_pair" "tasky_key" {
+  key_name   = "tasky-key"
+  public_key = tls_public_key.tasky_key.public_key_openssh
+}
+
+resource "tls_private_key" "tasky_key" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
 resource "aws_vpc" "tasky_vpc" {
   cidr_block = "10.0.0.0/16"
 }
 
-# Create Subnet
 resource "aws_subnet" "tasky_subnet" {
   vpc_id                  = aws_vpc.tasky_vpc.id
   cidr_block              = "10.0.1.0/24"
@@ -15,10 +23,10 @@ resource "aws_subnet" "tasky_subnet" {
   map_public_ip_on_launch = true
 }
 
-# Create Security Group
 resource "aws_security_group" "tasky_sg" {
   name        = "tasky_sg"
-  description = "Allow inbound SSH and HTTP"
+  description = "Allow inbound traffic for Tasky website"
+  vpc_id      = aws_vpc.tasky_vpc.id
 
   ingress {
     from_port   = 22
@@ -42,15 +50,26 @@ resource "aws_security_group" "tasky_sg" {
   }
 }
 
-# Create Key Pair
-resource "aws_key_pair" "tasky_key" {
-  key_name   = "tasky-key"
-  public_key = file("~/.ssh/id_rsa.pub")  # Replace with the path to your public SSH key
+resource "aws_security_group_rule" "allow_ssh" {
+  type              = "ingress"
+  from_port         = 22
+  to_port           = 22
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.tasky_sg.id
 }
 
-# EC2 Instance
+resource "aws_security_group_rule" "allow_http" {
+  type              = "ingress"
+  from_port         = 80
+  to_port           = 80
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.tasky_sg.id
+}
+
 resource "aws_instance" "tasky" {
-  ami                    = "ami-0c55b159cbfafe1f0"  # Replace with your region-specific Ubuntu AMI
+  ami                    = "ami-04b4f1a9cf54c11d0"  # Ubuntu AMI ID
   instance_type          = "t2.micro"
   key_name               = aws_key_pair.tasky_key.key_name
   subnet_id             = aws_subnet.tasky_subnet.id
@@ -81,19 +100,12 @@ resource "aws_instance" "tasky" {
   }
 }
 
-# S3 Bucket for Backup
 resource "aws_s3_bucket" "backup_bucket" {
   bucket = "database-backups-project"
 }
 
-# S3 Bucket ACL (to avoid deprecation warning)
 resource "aws_s3_bucket_acl" "backup_bucket_acl" {
   bucket = aws_s3_bucket.backup_bucket.id
   acl    = "private"
-}
-
-# Output instance public IP
-output "instance_public_ip" {
-  value = aws_instance.tasky.public_ip
 }
 
