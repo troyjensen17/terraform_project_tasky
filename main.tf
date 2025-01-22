@@ -8,16 +8,15 @@ resource "tls_private_key" "tasky_key" {
   rsa_bits  = 4096
 }
 
-# Generate the public key from the private key
-resource "tls_public_key" "tasky_key" {
-  key_size = tls_private_key.tasky_key.rsa_bits
+# Use a data source for the public key instead of a resource
+data "tls_public_key" "tasky_key" {
   public_key_openssh = tls_private_key.tasky_key.public_key_openssh
 }
 
 # Create a Key Pair on AWS using the public key
 resource "aws_key_pair" "tasky_key" {
   key_name   = "tasky-key"
-  public_key = tls_public_key.tasky_key.public_key_openssh
+  public_key = data.tls_public_key.tasky_key.public_key_openssh
 }
 
 # Create a VPC
@@ -99,7 +98,7 @@ resource "aws_s3_bucket" "backup_bucket" {
   bucket = "database-backups-project"
 }
 
-# Set ACL for the S3 bucket
+# Create the ACL for the S3 bucket
 resource "aws_s3_bucket_acl" "backup_bucket_acl" {
   bucket = aws_s3_bucket.backup_bucket.id
   acl    = "private"
