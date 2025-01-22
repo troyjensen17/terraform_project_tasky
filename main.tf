@@ -2,83 +2,22 @@ provider "aws" {
   region = "us-east-1"
 }
 
-provider "tls" {}
-
-resource "tls_private_key" "tasky_key" {
-  algorithm = "RSA"
-  rsa_bits  = 2048
-}
-
-resource "aws_key_pair" "tasky_key" {
-  key_name   = "tasky-key"
-  public_key = tls_private_key.tasky_key.public_key_openssh
-}
-
 resource "aws_vpc" "tasky_vpc" {
   cidr_block = "10.0.0.0/16"
+  enable_dns_support = true
+  enable_dns_hostnames = true
+
+  tags = {
+    Name = "tasky-vpc"
+  }
 }
 
 resource "aws_subnet" "tasky_subnet" {
-  vpc_id                  = aws_vpc.tasky_vpc.id
-  cidr_block              = "10.0.1.0/24"
-  availability_zone       = "us-east-1a"
+  vpc_id = aws_vpc.tasky_vpc.id
+  cidr_block = "10.0.1.0/24"
+  availability_zone = "us-east-1a"
   map_public_ip_on_launch = true
-}
-
-resource "aws_security_group" "tasky_sg" {
-  name        = "tasky-sg"
-  description = "Allow SSH and MongoDB access"
-  vpc_id      = aws_vpc.tasky_vpc.id
-
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    from_port   = 27017
-    to_port     = 27017
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-resource "aws_instance" "tasky" {
-  ami                    = "ami-xxxxxxxxxxxx"  # Replace with a valid Amazon Linux 2 AMI ID
-  instance_type          = "t2.micro"
-  key_name               = aws_key_pair.tasky_key.key_name
-  security_groups       = [aws_security_group.tasky_sg.name]
-  subnet_id             = aws_subnet.tasky_subnet.id
-  associate_public_ip_address = true
 
   tags = {
-    Name = "Tasky-Instance"
-  }
-}
-
-resource "aws_s3_bucket" "backup_bucket" {
-  bucket = "database-backups-project"
-  acl    = "private"
-}
-
-resource "aws_s3_bucket_acl" "backup_acl" {
-  bucket = aws_s3_bucket.backup_bucket.id
-  acl    = "private"
-}
-
-resource "aws_s3_object" "backup_object" {
-  bucket = aws_s3_bucket.backup_bucket.id
-  key    = "backup.tar.gz"
-  source = "/path/to/backup.tar.gz"  # Replace with the actual backup path
-}
-
+    Name = "tasky-subnet"
 
