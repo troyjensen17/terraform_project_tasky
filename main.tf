@@ -2,10 +2,12 @@ provider "aws" {
   region = "us-east-1"  # Use your desired AWS region
 }
 
+# Create VPC
 resource "aws_vpc" "tasky_vpc" {
   cidr_block = "10.0.0.0/16"
 }
 
+# Create Subnet
 resource "aws_subnet" "tasky_subnet" {
   vpc_id                  = aws_vpc.tasky_vpc.id
   cidr_block              = "10.0.1.0/24"
@@ -13,6 +15,7 @@ resource "aws_subnet" "tasky_subnet" {
   map_public_ip_on_launch = true
 }
 
+# Create Security Group
 resource "aws_security_group" "tasky_sg" {
   name        = "tasky_sg"
   description = "Allow inbound SSH and HTTP"
@@ -39,19 +42,21 @@ resource "aws_security_group" "tasky_sg" {
   }
 }
 
+# Create Key Pair
 resource "aws_key_pair" "tasky_key" {
   key_name   = "tasky-key"
   public_key = file("~/.ssh/id_rsa.pub")  # Replace with the path to your public SSH key
 }
 
+# EC2 Instance
 resource "aws_instance" "tasky" {
   ami                    = "ami-0c55b159cbfafe1f0"  # Replace with your region-specific Ubuntu AMI
   instance_type          = "t2.micro"
   key_name               = aws_key_pair.tasky_key.key_name
   subnet_id             = aws_subnet.tasky_subnet.id
-  security_group_ids    = [aws_security_group.tasky_sg.id]
+  vpc_security_group_ids = [aws_security_group.tasky_sg.id]
 
-  # User data to pull the repository and start the website
+  # User Data to install and run Tasky website
   user_data = <<-EOF
               #!/bin/bash
               # Update and install necessary dependencies
@@ -76,11 +81,18 @@ resource "aws_instance" "tasky" {
   }
 }
 
+# S3 Bucket for Backup
 resource "aws_s3_bucket" "backup_bucket" {
   bucket = "database-backups-project"
+}
+
+# S3 Bucket ACL (to avoid deprecation warning)
+resource "aws_s3_bucket_acl" "backup_bucket_acl" {
+  bucket = aws_s3_bucket.backup_bucket.id
   acl    = "private"
 }
 
+# Output instance public IP
 output "instance_public_ip" {
   value = aws_instance.tasky.public_ip
 }
