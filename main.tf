@@ -2,16 +2,24 @@ provider "aws" {
   region = "us-east-1"
 }
 
-resource "aws_key_pair" "tasky_key" {
-  key_name   = "tasky-key"
-  public_key = tls_public_key.tasky_key.public_key_openssh
-}
-
+# Generate private and public keys
 resource "tls_private_key" "tasky_key" {
   algorithm = "RSA"
   rsa_bits  = 4096
 }
 
+resource "tls_public_key" "tasky_key" {
+  depends_on = [tls_private_key.tasky_key]
+  public_key_openssh = tls_private_key.tasky_key.public_key_openssh
+}
+
+# AWS Key Pair
+resource "aws_key_pair" "tasky_key" {
+  key_name   = "tasky-key"
+  public_key = tls_public_key.tasky_key.public_key_openssh
+}
+
+# Create a VPC
 resource "aws_vpc" "tasky_vpc" {
   cidr_block = "10.0.0.0/16"
   enable_dns_support = true
@@ -22,6 +30,7 @@ resource "aws_vpc" "tasky_vpc" {
   }
 }
 
+# Create a Subnet
 resource "aws_subnet" "tasky_subnet" {
   vpc_id     = aws_vpc.tasky_vpc.id
   cidr_block = "10.0.1.0/24"
@@ -32,6 +41,7 @@ resource "aws_subnet" "tasky_subnet" {
   }
 }
 
+# Create a Security Group
 resource "aws_security_group" "tasky_sg" {
   description = "Allow SSH and MongoDB access"
 
@@ -64,6 +74,7 @@ resource "aws_security_group" "tasky_sg" {
   }
 }
 
+# Create EC2 instance
 resource "aws_instance" "tasky" {
   ami           = "ami-043a5a82b6cf98947" # Amazon Linux 2 AMI
   instance_type = "t2.micro"
@@ -85,19 +96,14 @@ resource "aws_instance" "tasky" {
               EOF
 }
 
+# Create S3 Bucket (without ACLs)
 resource "aws_s3_bucket" "backup_bucket" {
   bucket = "database-backups-project"
-  acl    = "private"
 
   tags = {
     Name = "backup-bucket"
   }
 }
 
-resource "aws_s3_bucket_object" "backup_object" {
-  bucket = aws_s3_bucket.backup_bucket.bucket
-  key    = "backup.tar.gz"
-  source = "/path/to/backup.tar.gz" # Remove this if you're no longer using backup.tar.gz
-  acl    = "private"
-}
+# Removed deprecated backup object resource
 
